@@ -11,6 +11,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getFinanceSummary, getDailyStatements } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, downloadCsv } from '@/utils'
+import { StatisticSkeleton, TableSkeleton } from '@/components/Skeletons'
 import dayjs from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -80,17 +81,17 @@ const FinancePage: React.FC = () => {
       </Space>
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
         {
-          key: 'summary', label: '财务汇总', children: (
+          key: 'summary', label: '财务汇总', children: loading ? <StatisticSkeleton /> : (
             <Row gutter={[16, 16]}>
-              <Col span={6}><Card loading={loading}><Statistic title="充值收入" value={summary.recharge_income || 0} prefix="¥" precision={2} /></Card></Col>
-              <Col span={6}><Card loading={loading}><Statistic title="消费收入" value={summary.consumption_income || 0} prefix="¥" precision={2} /></Card></Col>
-              <Col span={6}><Card loading={loading}><Statistic title="退款金额" value={summary.refund_amount || 0} prefix="¥" precision={2} /></Card></Col>
-              <Col span={6}><Card loading={loading}><Statistic title="净收入" value={summary.net_income || 0} prefix="¥" precision={2} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+              <Col span={6}><Card><Statistic title="充值收入" value={summary.recharge_income || 0} prefix="¥" precision={2} /></Card></Col>
+              <Col span={6}><Card><Statistic title="消费收入" value={summary.consumption_income || 0} prefix="¥" precision={2} /></Card></Col>
+              <Col span={6}><Card><Statistic title="退款金额" value={summary.refund_amount || 0} prefix="¥" precision={2} /></Card></Col>
+              <Col span={6}><Card><Statistic title="净收入" value={summary.net_income || 0} prefix="¥" precision={2} valueStyle={{ color: '#3f8600' }} /></Card></Col>
             </Row>
           ),
         },
         {
-          key: 'daily', label: '每日对账单', children: (
+          key: 'daily', label: '每日对账单', children: loading ? <TableSkeleton columns={5} rows={10} /> : (
             <Table dataSource={dailyData} columns={dailyColumns} rowKey="date" loading={loading} />
           ),
         },

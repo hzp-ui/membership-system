@@ -9,6 +9,7 @@ import { Table, Input, Select, Button, Space, Tag, message } from 'antd'
 import { getAppointments, confirmAppointment, cancelAppointment, completeAppointment } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { getAppointmentStatusLabel, getAppointmentStatusColor, formatDate } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 import type { AppointmentStatus } from '@/types'
 
 /**
@@ -68,15 +69,21 @@ const AppointmentList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <Space style={{ marginBottom: 16 }}>
-        <Select placeholder="预约状态" allowClear style={{ width: 120 }} onChange={setStatusFilter}>
-          <Select.Option value="pending">待确认</Select.Option>
-          <Select.Option value="confirmed">已确认</Select.Option>
-          <Select.Option value="completed">已完成</Select.Option>
-          <Select.Option value="cancelled">已取消</Select.Option>
-        </Select>
-      </Space>
-      <Table dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={8} rows={10} />
+      ) : (
+        <>
+          <Space style={{ marginBottom: 16 }}>
+            <Select placeholder="预约状态" allowClear style={{ width: 120 }} onChange={setStatusFilter}>
+              <Select.Option value="pending">待确认</Select.Option>
+              <Select.Option value="confirmed">已确认</Select.Option>
+              <Select.Option value="completed">已完成</Select.Option>
+              <Select.Option value="cancelled">已取消</Select.Option>
+            </Select>
+          </Space>
+          <Table dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
     </div>
   )
 }

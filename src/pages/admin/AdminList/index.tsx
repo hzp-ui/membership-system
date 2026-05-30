@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconf
 import { PlusOutlined } from '@ant-design/icons'
 import { getAdmins, createAdmin, updateAdmin, deleteAdmin, getStores } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { TableSkeleton } from '@/components/Skeletons'
 
 const AdminList: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
@@ -75,10 +76,16 @@ const AdminList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <div style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditAdmin(null); form.resetFields(); setModalOpen(true) }}>新增管理员</Button>
-      </div>
-      <Table dataSource={admins} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={6} rows={10} />
+      ) : (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditAdmin(null); form.resetFields(); setModalOpen(true) }}>新增管理员</Button>
+          </div>
+          <Table dataSource={admins} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
       <Modal title={editAdmin ? '编辑管理员' : '新增管理员'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)}>
         <Form form={form} layout="vertical">
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}><Input disabled={!!editAdmin} /></Form.Item>

@@ -9,6 +9,7 @@ import { Table, Input, DatePicker, Space, message } from 'antd'
 import { getConsumptionRecords } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatDate } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 
 /**
  * 消费记录列表页面组件
@@ -61,10 +62,16 @@ const ConsumptionList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <Space style={{ marginBottom: 16 }}>
-        <Input.Search placeholder="搜索会员姓名/手机号" onSearch={setSearch} style={{ width: 300 }} />
-      </Space>
-      <Table dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={10} rows={10} />
+      ) : (
+        <>
+          <Space style={{ marginBottom: 16 }}>
+            <Input.Search placeholder="搜索会员姓名/手机号" onSearch={setSearch} style={{ width: 300 }} />
+          </Space>
+          <Table dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
     </div>
   )
 }

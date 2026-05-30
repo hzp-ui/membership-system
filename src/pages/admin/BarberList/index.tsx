@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, Tag, Space, message } from '
 import { PlusOutlined } from '@ant-design/icons'
 import { getBarbers, createBarber, updateBarber, deleteBarber } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { TableSkeleton } from '@/components/Skeletons'
 
 const BarberList: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
@@ -60,8 +61,14 @@ const BarberList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => { setEditBarber(null); form.resetFields(); setModalOpen(true) }}>新增理发师</Button>
-      <Table dataSource={barbers} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={6} rows={10} />
+      ) : (
+        <>
+          <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => { setEditBarber(null); form.resetFields(); setModalOpen(true) }}>新增理发师</Button>
+          <Table dataSource={barbers} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
       <Modal title={editBarber ? '编辑理发师' : '新增理发师'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)}>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="姓名" rules={[{ required: true }]}><Input /></Form.Item>

@@ -11,6 +11,7 @@ import { getServices, createService, updateService, deleteService,
   getServiceTypes, createServiceType, deleteServiceType } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 
 /**
  * 服务项目管理页面组件
@@ -109,8 +110,14 @@ const ServiceList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => { setEditService(null); form.resetFields(); setModalOpen(true) }}>新增服务项目</Button>
-      <Table dataSource={services} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1000 }} />
+      {loading ? (
+        <TableSkeleton columns={9} rows={10} />
+      ) : (
+        <>
+          <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => { setEditService(null); form.resetFields(); setModalOpen(true) }}>新增服务项目</Button>
+          <Table dataSource={services} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1000 }} />
+        </>
+      )}
       <Modal title={editService ? '编辑服务项目' : '新增服务项目'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} width={600}>
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="服务类型" rules={[{ required: true }]}>

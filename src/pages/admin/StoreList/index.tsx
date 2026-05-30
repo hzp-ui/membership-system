@@ -13,6 +13,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { getStores, createStore, updateStore } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { getStoreStatusLabel } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 import type { Store, StoreStatus } from '@/types'
 
 /** 门店管理页面组件 */
@@ -80,10 +81,16 @@ const StoreList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <div style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditStore(null); form.resetFields(); setModalOpen(true) }}>新增门店</Button>
-      </div>
-      <Table dataSource={stores} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={6} rows={5} />
+      ) : (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditStore(null); form.resetFields(); setModalOpen(true) }}>新增门店</Button>
+          </div>
+          <Table dataSource={stores} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
       <Modal title={editStore ? '编辑门店' : '新增门店'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)}>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="门店名称" rules={[{ required: true, message: '请输入门店名称' }]}>

@@ -9,6 +9,7 @@ import { Table, Input, Select, Tag, Button, Modal, Form, Space, message, InputNu
 import { getMembers, updateMember, getStores, getPackages, recharge, customRecharge, deductBalance, addRechargePoints, getServices } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { getLevelLabel, getLevelColor, formatMoney } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 import type { MemberLevel } from '@/types'
 
 const MemberList: React.FC = () => {
@@ -157,17 +158,23 @@ const MemberList: React.FC = () => {
   return (
     <div>
       {contextHolder}
-      <Space style={{ marginBottom: 16 }}>
-        <Input.Search placeholder="搜索姓名/手机号" onSearch={setSearch} style={{ width: 250 }} />
-        <Select placeholder="会员等级" allowClear style={{ width: 120 }} onChange={setLevelFilter}>
-          <Select.Option value="normal">普通</Select.Option>
-          <Select.Option value="silver">银卡</Select.Option>
-          <Select.Option value="gold">金卡</Select.Option>
-          <Select.Option value="diamond">钻石</Select.Option>
-        </Select>
-        <Button onClick={loadData}>查询</Button>
-      </Space>
-      <Table dataSource={members} columns={columns} rowKey="id" loading={loading} />
+      {loading ? (
+        <TableSkeleton columns={7} rows={10} />
+      ) : (
+        <>
+          <Space style={{ marginBottom: 16 }}>
+            <Input.Search placeholder="搜索姓名/手机号" onSearch={setSearch} style={{ width: 250 }} />
+            <Select placeholder="会员等级" allowClear style={{ width: 120 }} onChange={setLevelFilter}>
+              <Select.Option value="normal">普通</Select.Option>
+              <Select.Option value="silver">银卡</Select.Option>
+              <Select.Option value="gold">金卡</Select.Option>
+              <Select.Option value="diamond">钻石</Select.Option>
+            </Select>
+            <Button onClick={loadData}>查询</Button>
+          </Space>
+          <Table dataSource={members} columns={columns} rowKey="id" loading={loading} />
+        </>
+      )}
       <Modal title="编辑会员" open={editModal} onOk={handleEdit} onCancel={() => setEditModal(false)}>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="姓名"><Input /></Form.Item>

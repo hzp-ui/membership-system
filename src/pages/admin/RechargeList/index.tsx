@@ -10,6 +10,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { getRechargeRecords, getPackages, createPackage, updatePackage, deletePackage } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatDate } from '@/utils'
+import { TableSkeleton } from '@/components/Skeletons'
 
 const { RangePicker } = DatePicker
 
@@ -106,9 +107,9 @@ const RechargeManage: React.FC = () => {
     <div>
       {contextHolder}
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-        { key: 'records', label: '充值记录', children: <Table dataSource={records} columns={recordColumns} rowKey="id" loading={loading} /> },
+        { key: 'records', label: '充值记录', children: loading ? <TableSkeleton columns={7} rows={10} /> : <Table dataSource={records} columns={recordColumns} rowKey="id" loading={loading} /> },
         {
-          key: 'packages', label: '充值套餐', children: (
+          key: 'packages', label: '充值套餐', children: loading ? <TableSkeleton columns={5} rows={5} /> : (
             <div>
               <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => { setEditPkg(null); form.resetFields(); setPkgModal(true) }}>新增套餐</Button>
               <Table dataSource={packages} columns={pkgColumns} rowKey="id" loading={loading} />
