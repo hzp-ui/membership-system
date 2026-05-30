@@ -40,7 +40,8 @@
 MmbershipWeb/
 ├── src/
 │   ├── components/         # 通用组件
-│   │   └── PrivateRoute.tsx    # 路由守卫
+│   │   ├── PrivateRoute.tsx    # 路由守卫
+│   │   └── Skeletons.tsx       # 骨架屏组件库
 │   ├── pages/              # 页面组件
 │   │   ├── admin/              # 管理员端
 │   │   │   ├── Login/          # 登录页
@@ -287,8 +288,14 @@ const THEME_COLOR = '#1677ff'; // 主色调
 ## 已知问题
 
 1. 国内访问 `vercel.app`、`pages.dev` 域名被墙，需绑定自定义域名
-2. 部分页面缺少加载状态骨架屏
-3. 会员端功能待开发
+2. 会员端功能待开发
+
+## 最近更新
+
+### 2026-05-30
+- ✅ 添加骨架屏加载状态：Dashboard、MemberList、FinanceReport、RechargeList、AdminList、BarberList、ServiceList、StoreList、ConsumptionList、AppointmentList
+- ✅ 新增 `Skeletons.tsx` 组件库（StatisticSkeleton、TableSkeleton、ChartSkeleton、ListSkeleton 等）
+- ✅ 改善数据加载时的用户体验，避免空白表格
 
 ## 后端仓库
 
