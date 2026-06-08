@@ -23,7 +23,7 @@ export default defineConfig({
           // React 核心
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           // 状态管理 + 工具
-          'vendor-utils': ['zustand', 'dayjs', '@supabase/supabase-js', 'axios'],
+          'vendor-utils': ['zustand', 'dayjs', 'axios'],
         },
       },
     },

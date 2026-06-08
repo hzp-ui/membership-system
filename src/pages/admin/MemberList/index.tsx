@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file MemberList.tsx
  * @description 会员管理页面组件
  * @module admin/MemberList
@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Table, Input, Select, Tag, Button, Modal, Form, Space, message, InputNumber } from 'antd'
-import { getMembers, updateMember, getStores, getPackages, recharge, customRecharge, deductBalance, addRechargePoints, getServices } from '@/services/api'
+import { getMembers, updateMember, getStores, getPackages, recharge, customRecharge, consume, addRechargePoints, getServices, getBarbers } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { getLevelLabel, getLevelColor, formatMoney } from '@/utils'
 import { TableSkeleton } from '@/components/Skeletons'
@@ -34,6 +34,8 @@ const MemberList: React.FC = () => {
   const [deductMember, setDeductMember] = useState<any>(null)
   const [deductForm] = Form.useForm()
   const [deductServices, setDeductServices] = useState<any[]>([])
+  const [deductBarbers, setDeductBarbers] = useState<any[]>([])
+  const [deductMode, setDeductMode] = useState<'service' | 'custom'>('service')
 
   const [messageApi, contextHolder] = message.useMessage()
 
@@ -41,20 +43,20 @@ const MemberList: React.FC = () => {
     setLoading(true)
     try {
       const sid = isSuperAdmin() ? undefined : storeId()
-    console.log('[MemberList] isSuperAdmin:', isSuperAdmin(), 'storeId:', storeId(), 'sid:', sid)
-
       const [memRes, stoRes] = await Promise.all([
         getMembers(sid),
         getStores(),
       ])
-      if (memRes.error) throw memRes.error
-      if (stoRes.error) throw stoRes.error
 
+      console.log('[loadData] memRes:', memRes, 'memRes.data:', memRes.data)
+      console.log('[loadData] stoRes:', stoRes, 'stoRes.data:', stoRes.data)
       let data = memRes.data || []
+      console.log('[loadData] data before filter:', data, 'isArray:', Array.isArray(data))
       if (search) data = data.filter((m: any) => m.name?.includes(search) || m.phone?.includes(search))
       if (levelFilter) data = data.filter((m: any) => m.level === levelFilter)
-      setMembers(data)
-      setStores(stoRes.data || [])
+      console.log('[loadData] data after filter:', data, 'isArray:', Array.isArray(data))
+      setMembers(Array.isArray(data) ? data : [])
+      setStores(Array.isArray(stoRes.data) ? stoRes.data : [])
     } catch (err: any) { messageApi.error(err.message || '加载数据失败') }
     finally { setLoading(false) }
   }
@@ -64,8 +66,7 @@ const MemberList: React.FC = () => {
   const handleEdit = async () => {
     try {
       const values = await form.validateFields()
-      const res = await updateMember(editMember.id, values)
-      if (res.error) throw res.error
+      await updateMember(editMember.id, values)
       messageApi.success('更新成功')
       setEditModal(false)
       loadData()
@@ -81,8 +82,7 @@ const MemberList: React.FC = () => {
     setRechargeMode('package')
     try {
       const res = await getPackages(record.store_id)
-      if (res.error) throw res.error
-      setPackages(res.data || [])
+      setPackages(Array.isArray(res.data) ? res.data : (res.data?.records || []))
     } catch (err: any) { messageApi.error(err.message || '加载套餐失败') }
     setRechargeModal(true)
   }
@@ -99,12 +99,12 @@ const MemberList: React.FC = () => {
         if (!values.package_id) { messageApi.error('请选择套餐'); return }
         res = await recharge(rechargeMember.id, values.package_id)
       }
-      if (res.error) throw res.error
+      if (res.code !== undefined && res.code !== 200) throw new Error(res.message || '充值失败')
       if (rechargeMode === 'custom') {
-        const pts = (res.data as any)?.points_earned || 0
+        const pts = res.data?.points_earned || 0
         messageApi.success(`充值成功，获得 ${pts} 积分`)
       } else {
-        const pkg = packages.find((p: any) => p.id === values.package_id)
+        const pkg = (Array.isArray(packages) ? packages : []).find((p: any) => p.id === values.package_id)
         if (pkg) await addRechargePoints(rechargeMember.id, pkg.amount)
         messageApi.success('充值成功')
       }
@@ -124,7 +124,7 @@ const MemberList: React.FC = () => {
     },
     { title: '积分', dataIndex: 'points', key: 'points' },
     { title: '余额', dataIndex: 'balance', key: 'balance', render: (v: number) => formatMoney(v) },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     {
       title: '操作',
       key: 'action',
@@ -144,10 +144,10 @@ const MemberList: React.FC = () => {
           <Button type="link" danger onClick={async () => {
             setDeductMember(record); deductForm.resetFields()
             try {
-              const res = await getServices(record.store_id)
-              if (res.error) throw res.error
-              setDeductServices(res.data || [])
-            } catch { messageApi.error('加载服务失败') }
+              const [svcRes, brbRes] = await Promise.all([getServices(record.store_id), getBarbers(record.store_id)])
+              setDeductServices(Array.isArray(svcRes.data) ? svcRes.data : (svcRes.data?.records || []))
+              setDeductBarbers(Array.isArray(brbRes.data) ? brbRes.data : (brbRes.data?.records || []))
+            } catch { messageApi.error('加载数据失败') }
             setDeductModal(true)
           }}>扣款</Button>
         </Space>
@@ -224,34 +224,54 @@ const MemberList: React.FC = () => {
           )}
         </Form>
       </Modal>
-      <Modal title={`会员扣款 - ${deductMember?.name || ''}`} open={deductModal} onOk={async () => {
+      <Modal title={`会员消费 - ${deductMember?.name || ''}`} open={deductModal} onOk={async () => {
         try {
           const values = await deductForm.validateFields()
-          if (!values.amount || values.amount <= 0) { messageApi.error('请输入有效扣款金额'); return }
-          const res = await deductBalance(deductMember.id, values.amount, values.reason || '手动扣款', values.service_id)
-          if (res.error) { messageApi.error((res.error as any).message || '扣款失败'); return }
-          messageApi.success('扣款成功')
+          if (deductMode === 'service') {
+            if (!values.service_id) { messageApi.error('请选择服务项目'); return }
+          } else {
+            if (!values.custom_amount || values.custom_amount <= 0) { messageApi.error('请输入有效金额'); return }
+          }
+          if (!values.barber_id) { messageApi.error('请选择理发师'); return }
+          const res = deductMode === 'service'
+            ? await consume(deductMember.id, values.service_id, values.barber_id)
+            : await consume(deductMember.id, 'custom', values.barber_id, values.custom_amount)
+          messageApi.success(`消费成功，消费金额 ¥${res?.amount || 0}`)
           setDeductModal(false)
+          setDeductMode('service')
+          deductForm.resetFields()
           loadData()
-        } catch (err: any) { messageApi.error(err.message || '扣款失败') }
-      }} onCancel={() => setDeductModal(false)}>
+        } catch (err: any) { messageApi.error(err.message || '消费失败') }
+      }} onCancel={() => { setDeductModal(false); setDeductMode('service'); deductForm.resetFields() }}>
         <Form form={deductForm} layout="vertical">
-          <Form.Item label="当前余额">
-            <span style={{ fontSize: 18, fontWeight: 600 }}>{formatMoney(deductMember?.balance)}</span>
+          <Form.Item label="当前余额"><span style={{ fontSize: 18, fontWeight: 600 }}>{formatMoney(deductMember?.balance)}</span></Form.Item>
+          <Form.Item label="消费方式">
+            <Select value={deductMode} onChange={setDeductMode}>
+              <Select.Option value="service">选择服务</Select.Option>
+              <Select.Option value="custom">自定义金额</Select.Option>
+            </Select>
           </Form.Item>
-          <Form.Item name="amount" label="扣款金额" rules={[{ required: true, message: '请输入扣款金额' }]}>
-            <InputNumber min={0.01} precision={2} prefix="¥" style={{ width: '100%' }} placeholder="请输入扣款金额" />
-          </Form.Item>
-          <Form.Item name="service_id" label="服务项目" rules={[{ required: true, message: '请选择服务项目' }]}>
-            <Select placeholder="请选择服务项目">
-              {deductServices.map((s: any) => (
-                <Select.Option key={s.id} value={s.id}>{s.name}（¥{s.price}）</Select.Option>
+          {deductMode === 'service' ? (
+            <Form.Item name="service_id" label="服务项目" rules={[{ required: true, message: '请选择服务项目' }]}>
+              <Select placeholder="请选择服务项目">
+                {deductServices.map((s: any) => (
+                  <Select.Option key={s.id} value={s.id}>{s.name}（¥{s.price}）</Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          ) : (
+            <Form.Item name="custom_amount" label="消费金额" rules={[{ required: true, message: '请输入消费金额' }]}>
+              <InputNumber min={0.01} precision={2} prefix="¥" style={{ width: '100%' }} placeholder="请输入消费金额" />
+            </Form.Item>
+          )}
+          <Form.Item name="barber_id" label="理发师" rules={[{ required: true, message: '请选择理发师' }]}>
+            <Select placeholder="请选择理发师">
+              {deductBarbers.map((b: any) => (
+                <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="reason" label="备注">
-            <Input placeholder="选填，备注信息" />
-          </Form.Item>
+          <Form.Item name="reason" label="备注"><Input placeholder="选填，备注信息" /></Form.Item>
         </Form>
       </Modal>
     </div>

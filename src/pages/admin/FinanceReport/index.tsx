@@ -42,8 +42,7 @@ const FinancePage: React.FC = () => {
   const handleExport = async () => {
     try {
       const res = await getDailyStatements(params)
-      if (res.error) throw res.error
-      downloadCsv((res.data as any)?.data || [], 'finance_report.csv')
+      downloadCsv(res.data || [], 'finance_report.csv')
     } catch { messageApi.error('导出失败') }
   }
 
@@ -52,10 +51,8 @@ const FinancePage: React.FC = () => {
     setLoading(true)
     try {
       const [sumRes, dailyRes] = await Promise.all([getFinanceSummary(params), getDailyStatements(params)])
-      if (sumRes.error) throw sumRes.error
-      if (dailyRes.error) throw dailyRes.error
-      setSummary((sumRes.data as any)?.data || {})
-      setDailyData((dailyRes.data as any)?.data || [])
+      setSummary(sumRes.data || {})
+      setDailyData(dailyRes.data || [])
     } catch { messageApi.error('加载财务数据失败') }
     finally { setLoading(false) }
   }

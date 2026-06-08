@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Table, Input, DatePicker, Space, message } from 'antd'
-import { getConsumptionRecords } from '@/services/api'
+import { getConsumptionRecords, getStores } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatDate } from '@/utils'
 import { TableSkeleton } from '@/components/Skeletons'
@@ -20,6 +20,7 @@ import { TableSkeleton } from '@/components/Skeletons'
 const ConsumptionList: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
   const [records, setRecords] = useState<any[]>([])
+  const [stores, setStores] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [messageApi, contextHolder] = message.useMessage()
@@ -32,8 +33,9 @@ const ConsumptionList: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await getConsumptionRecords(sid)
-      setRecords(res.data || [])
+      const [dataRes, stoRes] = await Promise.all([getConsumptionRecords(sid), getStores()])
+      setRecords(dataRes.data || [])
+      setStores(stoRes.data || [])
     } catch { messageApi.error('加载消费记录失败') }
     finally { setLoading(false) }
   }
@@ -55,7 +57,7 @@ const ConsumptionList: React.FC = () => {
     { title: '服务项目', dataIndex: 'service_name', key: 'service_name' },
     { title: '理发师', dataIndex: 'barber_name', key: 'barber_name' },
     { title: '获得积分', dataIndex: 'points_earned', key: 'points_earned' },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'store_id', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     { title: '消费时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatDate(v) },
   ]
 

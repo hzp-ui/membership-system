@@ -1,63 +1,46 @@
 /**
- * @file api.ts - API 服务模块（全 RPC）
- * @description 所有数据库操作通过 RPC 函数，权限在数据库层控制
- *               store_admin 自动注入 p_store_id 过滤，super_admin 可查全部
+ * @file api.ts - API 服务模块（REST）
+ * @description 所有操作通过 REST API，移除 Supabase RPC 依赖
  * @module services/api
  */
 
-import { supabase } from '@/lib/supabase'
+import api from '@/lib/axios'
 import { useAuthStore } from '@/stores/auth'
-import type {
-  Store, Admin, Member, Barber, Service,
-  RechargePackage,
-} from '@/types'
 
 /**
  * 获取当前管理员视角下的 store_id 过滤值
- * - super_admin：返回传入值（支持查全部或指定门店）
- * - store_admin：强制返回自己的 store_id（无视传入值，保证数据隔离）
  */
-function resolveStoreId(passedStoreId?: string | null): string | null {
+function resolveStoreId(passedStoreId?: string | null): string | undefined {
   const { isSuperAdmin, storeId } = useAuthStore.getState()
-  if (isSuperAdmin()) return passedStoreId ?? null
-  // store_admin：强制用自己的门店 ID
-  return storeId() ?? null
+  if (isSuperAdmin()) return passedStoreId ?? undefined
+  return storeId() ?? undefined
 }
 
 /**
- * 统一 RPC 调用包装
- * RPC 返回 { data: { data: [...], error: ... }, error: ... }
- * 包装后返回 { data: [...], error: ... }，和原 supabase.from() 返回格式一致
+ * 统一后端返回格式：分页对象提取 records，其他直接返回
+ * 后端部分接口返回数组 []，部分返回分页 { records: [], total, ... }
  */
-async function rpcCall(fn: string, params: Record<string, any>) {
-  const { data, error } = await supabase.rpc(fn, params)
-  if (error) return { data: null, error }
-  // RPC 函数内部返回 { data: ..., error: ... }
-  if (data?.error) return { data: null, error: new Error(data.error) }
-  return { data: data?.data ?? data, error: null }
+function unwrapData<T>(res: any): { data: T } {
+  const d = res?.data
+  // 分页对象 → 提取 records 数组，包装回 { data: [...] } 保持前端 .data 兼容
+  if (d && typeof d === 'object' && 'records' in d && Array.isArray(d.records)) {
+    return { data: d.records as unknown as T }
+  }
+  // 普通数组/对象也包装回 { data: ... }
+  return { data: d as T }
 }
 
-// ==================== 认证（RPC） ====================
+// ==================== 认证 ====================
 
 export const adminLogin = async (username: string, password: string) => {
-  const { data, error } = await supabase.rpc('rpc_admin_login', {
-    p_username: username,
-    p_password: password,
-  })
-  if (error) throw error
-  if (data?.error) throw new Error(data.error)
-  return { data: data.data }
+  const res = await api.post('/auth/admin/login', { username, password })
+  // 拦截器返回 Result<T>，res.data 是业务数据 { token, userId, ... }
+  return res.data
 }
 
 export const memberLogin = async (phone: string, password: string, store_id: string) => {
-  const { data, error } = await supabase.rpc('rpc_member_login', {
-    p_phone: phone,
-    p_password: password,
-    p_store_id: store_id,
-  })
-  if (error) throw error
-  if (data?.error) throw new Error(data.error)
-  return { data: data.data }
+  const res = await api.post('/auth/member/login', { phone, password, storeId: store_id })
+  return res.data
 }
 
 export const memberRegister = async (data: {
@@ -66,224 +49,146 @@ export const memberRegister = async (data: {
   name: string
   store_id: string
 }) => {
-  const { data: result, error } = await supabase.rpc('rpc_member_register', {
-    p_phone: data.phone,
-    p_password: data.password,
-    p_name: data.name,
-    p_store_id: data.store_id,
+  const res = await api.post('/auth/member/register', {
+    phone: data.phone,
+    password: data.password,
+    name: data.name,
+    storeId: data.store_id,
   })
-  if (error) throw error
-  if (result?.error) throw new Error(result.error)
-  return { data: result.data }
+  return res.data
 }
 
 // ==================== 门店 ====================
 
 export const getStores = (storeId?: string | null) =>
-  rpcCall('rpc_get_stores', { p_store_id: resolveStoreId(storeId) })
+  api.get('/stores', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const createStore = (data: Partial<Store>) =>
-  rpcCall('rpc_create_store', {
-    p_name: data.name,
-    p_address: data.address || null,
-    p_phone: data.phone || null,
-    p_manager: data.manager || null,
-  })
+export const createStore = (data: any) =>
+  api.post('/stores', data)
 
-export const updateStore = (id: string, data: Partial<Store>) =>
-  rpcCall('rpc_update_store', {
-    p_id: id,
-    p_name: data.name || null,
-    p_address: data.address || null,
-    p_phone: data.phone || null,
-    p_manager: data.manager || null,
-    p_status: data.status || null,
-  })
+export const updateStore = (id: string, data: any) =>
+  api.put(`/stores/${id}`, data)
+
+export const deleteStore = (id: string) =>
+  api.delete(`/stores/${id}`)
 
 // ==================== 管理员 ====================
 
 export const getAdmins = (storeId?: string | null) =>
-  rpcCall('rpc_get_admins', { p_store_id: resolveStoreId(storeId) })
+  api.get('/admins', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
 export const createAdmin = (data: any) =>
-  rpcCall('rpc_create_admin', {
-    p_username: data.username,
-    p_password: data.password,
-    p_name: data.name,
-    p_phone: data.phone || null,
-    p_role: data.role || 'store_admin',
-    p_store_id: data.store_id || null,
-  })
+  api.post('/admins', data)
 
 export const updateAdmin = (id: string, data: any) =>
-  rpcCall('rpc_update_admin', {
-    p_id: id,
-    p_name: data.name || null,
-    p_phone: data.phone || null,
-    p_role: data.role || null,
-    p_store_id: data.store_id || null,
-    p_password: data.password || null,
-  })
+  api.put(`/admins/${id}`, data)
 
 export const deleteAdmin = (id: string) =>
-  rpcCall('rpc_delete_admin', { p_id: id })
+  api.delete(`/admins/${id}`)
 
 // ==================== 会员 ====================
 
 export const getMembers = (storeId?: string | null) =>
-  rpcCall('rpc_get_members', { p_store_id: resolveStoreId(storeId) })
+  api.get('/members', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const updateMember = (id: string, data: Partial<Member>) =>
-  rpcCall('rpc_update_member', {
-    p_id: id,
-    p_name: data.name || null,
-    p_phone: data.phone || null,
-    p_level: data.level || null,
-    p_points: (data as any).points ?? null,
-    p_balance: (data as any).balance ?? null,
-    p_status: (data as any).status || null,
-  })
+export const updateMember = (id: string, data: any) =>
+  api.put(`/members/${id}`, data)
+
+export const deleteMember = (id: string) =>
+  api.delete(`/members/${id}`)
 
 // ==================== 理发师 ====================
 
 export const getBarbers = (storeId?: string | null) =>
-  rpcCall('rpc_get_barbers', { p_store_id: resolveStoreId(storeId) })
+  api.get('/barbers', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const createBarber = (data: Partial<Barber>) =>
-  rpcCall('rpc_create_barber', {
-    p_name: data.name,
-    p_phone: data.phone || null,
-    p_specialties: data.specialties || null,
-    p_store_id: data.store_id,
-  })
+export const createBarber = (data: any) =>
+  api.post('/barbers', data)
 
-export const updateBarber = (id: string, data: Partial<Barber>) =>
-  rpcCall('rpc_update_barber', {
-    p_id: id,
-    p_name: data.name || null,
-    p_phone: data.phone || null,
-    p_specialties: data.specialties || null,
-    p_status: (data as any).status || null,
-  })
+export const updateBarber = (id: string, data: any) =>
+  api.put(`/barbers/${id}`, data)
 
 export const deleteBarber = (id: string) =>
-  rpcCall('rpc_delete_barber', { p_id: id })
+  api.delete(`/barbers/${id}`)
 
 // ==================== 服务项目 ====================
 
 export const getServices = (storeId?: string | null) =>
-  rpcCall('rpc_get_services', { p_store_id: resolveStoreId(storeId) })
+  api.get('/services', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const createService = (data: Partial<Service>) =>
-  rpcCall('rpc_create_service', {
-    p_type: data.type,
-    p_name: data.name,
-    p_price: data.price,
-    p_discount_normal: (data as any).discount_normal ?? 1.00,
-    p_discount_silver: (data as any).discount_silver ?? 0.95,
-    p_discount_gold: (data as any).discount_gold ?? 0.90,
-    p_discount_diamond: (data as any).discount_diamond ?? 0.80,
-    p_store_id: (data as any).store_id,
-  })
+export const createService = (data: any) =>
+  api.post('/services', data)
 
-export const updateService = (id: string, data: Partial<Service>) =>
-  rpcCall('rpc_update_service', {
-    p_id: id,
-    p_type: data.type || null,
-    p_name: data.name || null,
-    p_price: (data as any).price ?? null,
-    p_discount_normal: (data as any).discount_normal ?? null,
-    p_discount_silver: (data as any).discount_silver ?? null,
-    p_discount_gold: (data as any).discount_gold ?? null,
-    p_discount_diamond: (data as any).discount_diamond ?? null,
-  })
+export const updateService = (id: string, data: any) =>
+  api.put(`/services/${id}`, data)
 
 export const deleteService = (id: string) =>
-  rpcCall('rpc_delete_service', { p_id: id })
+  api.delete(`/services/${id}`)
 
 // ==================== 服务类型 ====================
 
 export const getServiceTypes = (storeId?: string | null) =>
-  rpcCall('rpc_get_service_types', { p_store_id: resolveStoreId(storeId) })
+  api.get('/service-types', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
 export const createServiceType = (name: string, storeId?: string) =>
-  rpcCall('rpc_create_service_type', { p_name: name, p_store_id: storeId || null })
+  api.post('/service-types', { name, storeId: storeId || null })
 
 export const deleteServiceType = (id: string) =>
-  rpcCall('rpc_delete_service_type', { p_id: id })
+  api.delete(`/service-types/${id}`)
 
-// ==================== 充值 ====================
-
-export const getRechargeRecords = (storeId?: string | null) =>
-  rpcCall('rpc_get_recharge_records', { p_store_id: resolveStoreId(storeId) })
+// ==================== 充值套餐 ====================
 
 export const getPackages = (storeId?: string | null) =>
-  rpcCall('rpc_get_packages', { p_store_id: resolveStoreId(storeId) })
+  api.get('/packages', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const createPackage = (data: Partial<RechargePackage>) =>
-  rpcCall('rpc_create_package', {
-    p_name: data.name,
-    p_amount: (data as any).amount,
-    p_bonus: (data as any).bonus ?? 0,
-    p_status: (data as any).status || 'active',
-    p_store_id: (data as any).store_id,
-  })
+export const createPackage = (data: any) =>
+  api.post('/packages', data)
 
-export const updatePackage = (id: string, data: Partial<RechargePackage>) =>
-  rpcCall('rpc_update_package', {
-    p_id: id,
-    p_name: data.name || null,
-    p_amount: (data as any).amount ?? null,
-    p_bonus: (data as any).bonus ?? null,
-    p_status: (data as any).status || null,
-  })
+export const updatePackage = (id: string, data: any) =>
+  api.put(`/packages/${id}`, data)
 
 export const deletePackage = (id: string) =>
-  rpcCall('rpc_delete_package', { p_id: id })
+  api.delete(`/packages/${id}`)
+
+// ==================== 充值记录 ====================
+
+export const getRechargeRecords = (storeId?: string | null) =>
+  api.get('/recharges', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
 export const recharge = (memberId: string, packageId: string) =>
-  rpcCall('rpc_create_recharge_record', { p_member_id: memberId, p_package_id: packageId, p_pay_method: 'cash' })
+  api.post('/recharges', { memberId, packageId })
 
-/** 自定义金额充值（RPC 原子操作） */
+/** 自定义金额充值 */
 export const customRecharge = (memberId: string, amount: number, bonus: number = 0) =>
-  rpcCall('rpc_create_recharge_record', { p_member_id: memberId, p_package_id: null, p_amount: amount, p_bonus: bonus, p_pay_method: 'cash' })
+  api.post('/recharges', { memberId, amount, bonus, packageName: null })
 
-/** @deprecated 充值积分已由 RPC 统一处理 */
+/** @deprecated 充值积分已由后端统一处理 */
 export const addRechargePoints = async (_memberId: string, _amount: number) => {
   return { data: { points_earned: 0 } }
 }
 
-/** 手动扣款（通过 consume RPC，使用该门店第一个服务项） */
+/** 手动扣款（通过 updateMember 扣余额） */
 export const deductBalance = async (memberId: string, amount: number, reason: string = '手动扣款', _serviceId?: string) => {
-  const { data: members } = await rpcCall('rpc_get_members', { p_store_id: null })
-  const member = (members as any[])?.find((m: any) => m.id === memberId)
+  const res = await getMembers()
+  const list = Array.isArray(res.data) ? res.data : (Array.isArray((res as any)?.records) ? (res as any).records : [])
+  const member = list.find((m: any) => m.id === memberId)
   if (!member) return { data: null, error: new Error('会员不存在') }
   if ((member as any).balance < amount) return { data: null, error: new Error('余额不足') }
-  return rpcCall('rpc_update_member', {
-    p_id: memberId,
-    p_balance: (member as any).balance - amount,
-  })
+  return updateMember(memberId, { balance: (member as any).balance - amount })
 }
 
-// ==================== 消费 ====================
+// ==================== 消费记录 ====================
 
 export const getConsumptionRecords = (storeId?: string | null) =>
-  rpcCall('rpc_get_consume_records', { p_store_id: resolveStoreId(storeId) })
+  api.get('/consumptions', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
-export const consume = (memberId: string, serviceId: string, barberId?: string) =>
-  rpcCall('rpc_create_consume_record', {
-    p_member_id: memberId,
-    p_service_id: serviceId,
-    p_barber_id: barberId || null,
-    p_amount: 0,
-    p_payment_method: 'balance',
-    p_remark: null,
-  })
+export const consume = (memberId: string, serviceId: string, barberId?: string, customAmount?: number): Promise<any> =>
+  api.post('/consumptions', { member_id: memberId, service_id: serviceId, barber_id: barberId, custom_amount: customAmount })
 
 // ==================== 预约 ====================
 
 export const getAppointments = (storeId?: string | null) =>
-  rpcCall('rpc_get_appointments', { p_store_id: resolveStoreId(storeId) })
+  api.get('/appointments', { params: { storeId: resolveStoreId(storeId) } }).then(r => unwrapData<any>(r))
 
 export const createAppointment = (data: {
   member_id: string
@@ -291,33 +196,35 @@ export const createAppointment = (data: {
   service_id: string
   appointment_time: string
 }) =>
-  rpcCall('rpc_create_appointment', {
-    p_member_id: data.member_id,
-    p_barber_id: data.barber_id,
-    p_service_id: data.service_id,
-    p_appointment_time: data.appointment_time,
+  api.post('/appointments', {
+    member_id: data.member_id,
+    barber_id: data.barber_id,
+    service_id: data.service_id,
+    appointment_time: data.appointment_time,
   })
 
 export const confirmAppointment = (id: string) =>
-  rpcCall('rpc_confirm_appointment', { p_id: id })
+  api.put(`/appointments/${id}/confirm`)
 
 export const cancelAppointment = (id: string) =>
-  rpcCall('rpc_cancel_appointment', { p_id: id })
+  api.put(`/appointments/${id}/cancel`)
 
 export const completeAppointment = (id: string) =>
-  rpcCall('rpc_complete_appointment', { p_id: id })
+  api.put(`/appointments/${id}/complete`)
 
-// ==================== 财务 ====================
+// ==================== 统计 ====================
 
 export const getFinanceSummary = (params: {
   store_id?: string | null
   start_date?: string
   end_date?: string
 }) =>
-  rpcCall('rpc_finance_summary', {
-    p_store_id: resolveStoreId(params.store_id),
-    p_start_date: params.start_date || null,
-    p_end_date: params.end_date || null,
+  api.get('/stats/finance-summary', {
+    params: {
+      storeId: resolveStoreId(params.store_id),
+      startDate: params.start_date,
+      endDate: params.end_date,
+    },
   })
 
 export const getDailyStatements = (params: {
@@ -325,10 +232,12 @@ export const getDailyStatements = (params: {
   start_date?: string
   end_date?: string
 }) =>
-  rpcCall('rpc_daily_statements', {
-    p_store_id: resolveStoreId(params.store_id),
-    p_start_date: params.start_date || null,
-    p_end_date: params.end_date || null,
+  api.get('/stats/daily-statements', {
+    params: {
+      storeId: resolveStoreId(params.store_id),
+      startDate: params.start_date,
+      endDate: params.end_date,
+    },
   })
 
 /** @deprecated CSV导出已弃用，改用 getDailyStatements */
@@ -338,19 +247,19 @@ export const exportFinanceCsv = (params: {
   end_date?: string
 }) => getDailyStatements(params)
 
-// ==================== 统计 ====================
-
 export const getRevenueStats = (params: {
   store_id?: string | null
   start_date?: string
   end_date?: string
   dimension?: string
 }) =>
-  rpcCall('rpc_revenue_stats', {
-    p_store_id: resolveStoreId(params.store_id),
-    p_start_date: params.start_date || null,
-    p_end_date: params.end_date || null,
-    p_dimension: params.dimension || 'day',
+  api.get('/stats/revenue', {
+    params: {
+      storeId: resolveStoreId(params.store_id),
+      startDate: params.start_date,
+      endDate: params.end_date,
+      dimension: params.dimension || 'day',
+    },
   })
 
 export const getMemberGrowthStats = (params: {
@@ -359,11 +268,13 @@ export const getMemberGrowthStats = (params: {
   end_date?: string
   dimension?: string
 }) =>
-  rpcCall('rpc_member_growth_stats', {
-    p_store_id: resolveStoreId(params.store_id),
-    p_start_date: params.start_date || null,
-    p_end_date: params.end_date || null,
-    p_dimension: params.dimension || 'day',
+  api.get('/stats/member-growth', {
+    params: {
+      storeId: resolveStoreId(params.store_id),
+      startDate: params.start_date,
+      endDate: params.end_date,
+      dimension: params.dimension || 'day',
+    },
   })
 
 export const getHotServicesStats = (params: {
@@ -371,8 +282,15 @@ export const getHotServicesStats = (params: {
   start_date?: string
   end_date?: string
 }) =>
-  rpcCall('rpc_hot_services_stats', {
-    p_store_id: resolveStoreId(params.store_id),
-    p_start_date: params.start_date || null,
-    p_end_date: params.end_date || null,
+  api.get('/stats/hot-services', {
+    params: {
+      storeId: resolveStoreId(params.store_id),
+      startDate: params.start_date,
+      endDate: params.end_date,
+    },
   })
+
+// ==================== Dashboard ====================
+
+export const getDashboard = (storeId?: string | null) =>
+  api.get('/dashboard', { params: { storeId: resolveStoreId(storeId) } })

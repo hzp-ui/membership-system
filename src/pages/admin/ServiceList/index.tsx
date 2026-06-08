@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file index.tsx
  * @description 服务项目管理页面组件
  * @module admin/ServiceList
@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Space, message, Popconfirm } from 'antd'
 import { PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import { getServices, createService, updateService, deleteService,
-  getServiceTypes, createServiceType, deleteServiceType } from '@/services/api'
+  getServiceTypes, createServiceType, deleteServiceType, getStores } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils'
 import { TableSkeleton } from '@/components/Skeletons'
@@ -19,9 +19,21 @@ import { TableSkeleton } from '@/components/Skeletons'
  * @description 提供服务的增删改查功能，支持各会员等级的折扣配置
  * @returns {JSX.Element} 服务项目管理页面
  */
+/**
+ * 服务类型中文映射表
+ */
+const SERVICE_TYPE_MAP: Record<string, string> = {
+  'haircut': '剪发',
+  'blow_dry': '洗吹',
+  'perm': '烫发',
+  'dye': '染发',
+  'treatment': '护理',
+}
+
 const ServiceList: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
   const [services, setServices] = useState<any[]>([])
+  const [stores, setStores] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -37,11 +49,10 @@ const ServiceList: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [sRes, tRes] = await Promise.all([getServices(sid), getServiceTypes()])
-      if (sRes.error) throw sRes.error
-      if (tRes.error) throw tRes.error
+      const [sRes, tRes, stoRes] = await Promise.all([getServices(sid), getServiceTypes(), getStores()])
       setServices(sRes.data || [])
       setServiceTypes(tRes.data || [])
+      setStores(stoRes.data || [])
     } catch { messageApi.error('加载失败') }
     finally { setLoading(false) }
   }
@@ -67,34 +78,32 @@ const ServiceList: React.FC = () => {
   const handleCreateType = async () => {
     if (!newTypeName.trim()) return
     try {
-      const res = await createServiceType(newTypeName.trim())
-      if (res.error) throw res.error
+      await createServiceType(newTypeName.trim())
       messageApi.success('类型已添加')
       setNewTypeName('')
       const tRes = await getServiceTypes()
-      if (!tRes.error) setServiceTypes(tRes.data || [])
+      setServiceTypes(tRes.data || [])
     } catch (err: any) { messageApi.error(err.message || '添加失败') }
   }
 
   const handleDeleteType = async (id: string) => {
     try {
-      const res = await deleteServiceType(id)
-      if (res.error) throw res.error
+      await deleteServiceType(id)
       messageApi.success('类型已删除')
       const tRes = await getServiceTypes()
-      if (!tRes.error) setServiceTypes(tRes.data || [])
+      setServiceTypes(tRes.data || [])
     } catch (err: any) { messageApi.error(err.message || '删除失败') }
   }
 
   const columns = [
-    { title: '服务类型', dataIndex: 'type', key: 'type' },
+    { title: '服务类型', dataIndex: 'type', key: 'type', render: (v: string) => SERVICE_TYPE_MAP[v] || v },
     { title: '服务名称', dataIndex: 'name', key: 'name' },
     { title: '原价', dataIndex: 'price', key: 'price', render: (v: number) => formatMoney(v) },
     { title: '普通折扣', dataIndex: 'discount_normal', key: 'discount_normal', render: (v: number) => `${(v * 100).toFixed(0)}%` },
     { title: '银卡折扣', dataIndex: 'discount_silver', key: 'discount_silver', render: (v: number) => `${(v * 100).toFixed(0)}%` },
     { title: '金卡折扣', dataIndex: 'discount_gold', key: 'discount_gold', render: (v: number) => `${(v * 100).toFixed(0)}%` },
     { title: '钻石折扣', dataIndex: 'discount_diamond', key: 'discount_diamond', render: (v: number) => `${(v * 100).toFixed(0)}%` },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     {
       title: '操作',
       key: 'action',
@@ -133,7 +142,7 @@ const ServiceList: React.FC = () => {
               )}
             >
               {serviceTypes.map((t: any) => (
-                <Select.Option key={t.id} value={t.name}>{t.name}</Select.Option>
+                <Select.Option key={t.id} value={t.name}>{SERVICE_TYPE_MAP[t.name] || t.name}</Select.Option>
               ))}
             </Select>
           </Form.Item>

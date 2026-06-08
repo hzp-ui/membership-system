@@ -1,6 +1,6 @@
 /**
  * @file pages/admin/Login.tsx - 管理员登录页
- * @description 使用 RPC 登录（不依赖 Supabase Auth）
+ * @description 使用 REST API 登录（替代 Supabase RPC）
  * @module pages/admin/Login
  */
 
@@ -8,7 +8,7 @@ import React, { useState } from 'react'
 import { Form, Input, Button, Card, message } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { adminLogin } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import type { Admin } from '@/types'
 
@@ -23,30 +23,22 @@ const AdminLogin: React.FC = () => {
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true)
     try {
-      // Step 1: RPC 登录（直接查 admins 表，不依赖 auth.users）
-      const { data: loginData, error: loginError } = await supabase.rpc('rpc_admin_login', {
-        p_username: values.username,
-        p_password: values.password,
-      })
-
-      if (loginError) {
-        throw new Error(loginError.message)
-      }
-
-      // rpc_admin_login 返回格式: {"data": {...admin对象...}}
-      const adminInfo = (loginData as any)?.data || loginData
-      if (!adminInfo || !(adminInfo as any).id) {
+      // REST API 登录
+      const loginData = await adminLogin(values.username, values.password)
+      // loginData = { token, admin }
+      if (!loginData || !loginData.token) {
         throw new Error('用户名或密码错误')
       }
 
-      // Step 2: 保存到 store（RPC 模式不需要 JWT，用 SECURITY DEFINER 鉴权）
+      // 后端返回 { token, userId, username, name, role, storeId }，映射为前端 Admin
       const admin: Admin = {
-        id: adminInfo.id,
-        username: adminInfo.username,
-        name: adminInfo.name,
-        phone: adminInfo.phone,
-        role: adminInfo.role,
-        store_id: adminInfo.store_id,
+        id: loginData.userId,
+        username: loginData.username,
+        name: loginData.name,
+        phone: loginData.phone ?? null,
+        role: loginData.role,
+        store_id: loginData.storeId ?? undefined,
+        token: loginData.token,
       }
 
       setAdmin(admin)

@@ -26,9 +26,9 @@ const Dashboard: React.FC = () => {
         getMemberGrowthStats({ store_id: storeIdFilter, dimension: 'day' }),
         getHotServicesStats({ store_id: storeIdFilter }),
       ])
-      setRevenueData((revRes.data as any)?.data || [])
-      setMemberData((memRes.data as any)?.data || [])
-      setHotServices((hotRes.data as any)?.data || [])
+      setRevenueData(revRes.data || [])
+      setMemberData(memRes.data || [])
+      setHotServices(hotRes.data || [])
     } catch (err) {
       console.error(err)
     } finally {

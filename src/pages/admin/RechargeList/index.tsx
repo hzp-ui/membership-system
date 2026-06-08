@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file RechargeManage.tsx
  * @description 充值管理页面组件
  * @module admin/RechargeManage
@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react'
 import { Table, Input, Select, Button, Modal, Form, Space, DatePicker, Tabs, message, InputNumber } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import { getRechargeRecords, getPackages, createPackage, updatePackage, deletePackage } from '@/services/api'
+import { getRechargeRecords, getPackages, createPackage, updatePackage, deletePackage, getStores } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatDate } from '@/utils'
 import { TableSkeleton } from '@/components/Skeletons'
@@ -24,6 +24,7 @@ const RechargeManage: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
   const [activeTab, setActiveTab] = useState('records')
   const [records, setRecords] = useState<any[]>([])
+  const [stores, setStores] = useState<any[]>([])
   const [packages, setPackages] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [pkgModal, setPkgModal] = useState(false)
@@ -38,7 +39,7 @@ const RechargeManage: React.FC = () => {
    */
   const loadRecords = async () => {
     setLoading(true)
-    try { const res = await getRechargeRecords(sid); setRecords(res.data || []) }
+    try { const [dataRes, stoRes] = await Promise.all([getRechargeRecords(sid), getStores()]); setRecords(dataRes.data || []); setStores(stoRes.data || []) }
     catch (e) { messageApi.error('加载充值记录失败') }
     finally { setLoading(false) }
   }
@@ -81,7 +82,7 @@ const RechargeManage: React.FC = () => {
     { title: '充值金额', dataIndex: 'amount', key: 'amount', render: (v: number) => formatMoney(v) },
     { title: '赠送金额', dataIndex: 'bonus', key: 'bonus', render: (v: number) => formatMoney(v) },
     { title: '套餐名称', dataIndex: 'package_name', key: 'package_name' },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     { title: '充值时间', dataIndex: 'created_at', key: 'created_at', render: (v: string) => formatDate(v) },
   ]
 
@@ -90,7 +91,7 @@ const RechargeManage: React.FC = () => {
     { title: '套餐名称', dataIndex: 'name', key: 'name' },
     { title: '充值金额', dataIndex: 'amount', key: 'amount', render: (v: number) => formatMoney(v) },
     { title: '赠送金额', dataIndex: 'bonus', key: 'bonus', render: (v: number) => formatMoney(v) },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     {
       title: '操作',
       key: 'action',

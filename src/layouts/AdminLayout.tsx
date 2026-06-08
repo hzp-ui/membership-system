@@ -74,7 +74,7 @@ const AdminLayout: React.FC = () => {
         {/* 顶部 Header */}
         <Header style={{ background: colorBgContainer, padding: '0 24px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
           <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout }] }}>
-            <Button type="text" icon={<UserOutlined />}>{admin?.name}</Button>
+            <Button type="text" icon={<UserOutlined />}>{admin?.username}</Button>
           </Dropdown>
         </Header>
         {/* 主内容区 */}

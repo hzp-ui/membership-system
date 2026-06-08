@@ -1,12 +1,11 @@
 /**
  * @file auth.ts - 认证状态管理（Zustand Store）
- * @description 使用 RPC 登录 + localStorage 持久化，不依赖 Supabase Auth
+ * @description 使用 REST API 登录 + localStorage 持久化
  * @module stores/auth
  */
 
 import { create } from 'zustand'
 import type { Admin, Member } from '@/types'
-import { setAuthToken, clearAuthToken as supabaseClearToken } from '@/lib/supabase'
 
 // ========== 类型定义 ==========
 
@@ -48,9 +47,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAdmin: (admin) => {
     localStorage.setItem('admin', JSON.stringify(admin))
     localStorage.setItem('role', 'admin')
-    // 保存 JWT Token（如果有）
+    // 保存 JWT Token
     if ((admin as any).token) {
-      setAuthToken((admin as any).token)
+      localStorage.setItem('auth_token', (admin as any).token)
     }
     set({ admin, role: 'admin', isAuthenticated: true, isLoading: false })
   },
@@ -58,6 +57,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setMember: (member) => {
     localStorage.setItem('member', JSON.stringify(member))
     localStorage.setItem('role', 'member')
+    if ((member as any).token) {
+      localStorage.setItem('auth_token', (member as any).token)
+    }
     set({ member, role: 'member', isAuthenticated: true, isLoading: false })
   },
 
@@ -65,8 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('admin')
     localStorage.removeItem('member')
     localStorage.removeItem('role')
-    // 清除 JWT Token
-    supabaseClearToken()
+    localStorage.removeItem('auth_token')
     set({ admin: null, member: null, role: null, isAuthenticated: false, isLoading: false })
   },
 
@@ -78,11 +79,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const raw = localStorage.getItem('admin')
         if (raw) {
           const admin = JSON.parse(raw)
-          // 恢复 JWT Token
-          const token = localStorage.getItem('auth_token')
-          if (token) {
-            setAuthToken(token)
-          }
           set({ admin, role: 'admin', isAuthenticated: true, isLoading: false })
           return
         }
@@ -95,7 +91,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
     } catch {
-      // localStorage 数据损坏，清空
       localStorage.removeItem('admin')
       localStorage.removeItem('member')
       localStorage.removeItem('role')

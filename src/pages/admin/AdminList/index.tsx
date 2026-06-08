@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { getAdmins, createAdmin, updateAdmin, deleteAdmin, getStores } from '@/services/api'
@@ -20,8 +20,6 @@ const AdminList: React.FC = () => {
     try {
       const sid = isSuperAdmin() ? undefined : storeId()
       const [aRes, sRes] = await Promise.all([getAdmins(sid), getStores()])
-      if (aRes.error) throw aRes.error
-      if (sRes.error) throw sRes.error
       setAdmins(aRes.data || [])
       setStores(sRes.data || [])
     } catch (err: any) { messageApi.error(err.message || '加载失败') }
@@ -34,12 +32,10 @@ const AdminList: React.FC = () => {
     try {
       const values = await form.validateFields()
       if (editAdmin) {
-        const res = await updateAdmin(editAdmin.id, values)
-        if (res.error) throw res.error
+        await updateAdmin(editAdmin.id, values)
         messageApi.success('更新成功')
       } else {
-        const res = await createAdmin(values)
-        if (res.error) throw res.error
+        await createAdmin(values)
         messageApi.success('创建成功')
       }
       setModalOpen(false)
@@ -58,14 +54,14 @@ const AdminList: React.FC = () => {
       key: 'role',
       render: (r: string) => <Tag color={r === 'super_admin' ? 'red' : 'blue'}>{r === 'super_admin' ? '超级管理员' : '店长'}</Tag>,
     },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string, r: any) => v || (r.role === 'super_admin' ? '-' : '未绑定') },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string, r: any) => v ? ((stores as any[])?.find((s: any) => s.id === v)?.name || v) : (r.role === 'super_admin' ? '-' : '未绑定') },
     {
       title: '操作',
       key: 'action',
       render: (_: any, record: any) => (
         <Space>
           <Button type="link" onClick={() => { setEditAdmin(record); form.setFieldsValue(record); setModalOpen(true) }}>编辑</Button>
-          <Popconfirm title="确定删除？" onConfirm={async () => { const res = await deleteAdmin(record.id); if (res.error) { messageApi.error('删除失败'); return } messageApi.success('已删除'); loadData() }}>
+          <Popconfirm title="确定删除？" onConfirm={async () => { try { await deleteAdmin(record.id); messageApi.success('已删除'); loadData() } catch { messageApi.error('删除失败') } }}>
             <Button type="link" danger>删除</Button>
           </Popconfirm>
         </Space>

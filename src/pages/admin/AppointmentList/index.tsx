@@ -1,12 +1,13 @@
-/**
+﻿/**
  * @file AppointmentList.tsx
  * @description 预约管理页面组件
  * @module admin/AppointmentList
  */
 
 import React, { useEffect, useState } from 'react'
-import { Table, Input, Select, Button, Space, Tag, message } from 'antd'
-import { getAppointments, confirmAppointment, cancelAppointment, completeAppointment } from '@/services/api'
+import { Table, Input, Select, Button, Space, Tag, message, Modal, Form, DatePicker, Divider } from 'antd'
+import { getAppointments, confirmAppointment, cancelAppointment, completeAppointment, getStores, getMembers, getBarbers, getServices, createAppointment } from '@/services/api'
+import type { Dayjs } from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import { getAppointmentStatusLabel, getAppointmentStatusColor, formatDate } from '@/utils'
 import { TableSkeleton } from '@/components/Skeletons'
@@ -21,8 +22,15 @@ import type { AppointmentStatus } from '@/types'
 const AppointmentList: React.FC = () => {
   const { isSuperAdmin, storeId } = useAuthStore()
   const [appointments, setAppointments] = useState<any[]>([])
+  const [stores, setStores] = useState<any[]>([])
+  const [members, setMembers] = useState<any[]>([])
+  const [barbers, setBarbers] = useState<any[]>([])
+  const [services, setServices] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | undefined>()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form] = Form.useForm()
+  const [submitting, setSubmitting] = useState(false)
   const [messageApi, contextHolder] = message.useMessage()
 
   const sid = isSuperAdmin() ? undefined : storeId()
@@ -33,13 +41,40 @@ const AppointmentList: React.FC = () => {
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await getAppointments(sid)
-      setAppointments(res.data || [])
+      const [dataRes, stoRes] = await Promise.all([getAppointments(sid), getStores()])
+      setAppointments(dataRes.data || [])
+      setStores(stoRes.data || [])
     } catch { messageApi.error('加载预约失败') }
     finally { setLoading(false) }
   }
 
   useEffect(() => { loadData() }, [])
+
+  /** 加载下拉数据 */
+  const loadOptions = async () => {
+    const [mRes, bRes, sRes] = await Promise.all([getMembers(sid), getBarbers(sid), getServices(sid)])
+    setMembers(mRes.data || [])
+    setBarbers(bRes.data || [])
+    setServices(sRes.data || [])
+  }
+
+  /** 新增预约 */
+  const handleCreate = async (values: { member_id: string; barber_id: string; service_id: string; appointment_time: Dayjs }) => {
+    setSubmitting(true)
+    try {
+      await createAppointment({
+        member_id: values.member_id,
+        barber_id: values.barber_id,
+        service_id: values.service_id,
+        appointment_time: values.appointment_time.format('YYYY-MM-DDTHH:mm:ss')
+      })
+      messageApi.success('预约创建成功')
+      setModalOpen(false)
+      form.resetFields()
+      loadData()
+    } catch { messageApi.error('创建预约失败') }
+    finally { setSubmitting(false) }
+  }
 
   /** 根据状态筛选后的预约记录 */
   const filtered = statusFilter ? appointments.filter((a: any) => a.status === statusFilter) : appointments
@@ -52,7 +87,7 @@ const AppointmentList: React.FC = () => {
     { title: '服务项目', dataIndex: 'service_name', key: 'service_name', render: (v: string) => v || '-' },
     { title: '预约时间', dataIndex: 'appointment_time', key: 'appointment_time', render: (v: string) => formatDate(v) },
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: AppointmentStatus) => <Tag color={getAppointmentStatusColor(s)}>{getAppointmentStatusLabel(s)}</Tag> },
-    { title: '所属门店', dataIndex: 'store_name', key: 'store_name', render: (v: string) => v || '-' },
+    { title: '所属门店', dataIndex: 'store_id', key: 'storeId', render: (v: string) => (stores as any[])?.find((s: any) => s.id === v)?.name || '-' },
     {
       title: '操作',
       key: 'action',
@@ -74,6 +109,7 @@ const AppointmentList: React.FC = () => {
       ) : (
         <>
           <Space style={{ marginBottom: 16 }}>
+            <Button type="primary" onClick={() => { loadOptions(); setModalOpen(true) }}>+ 新增预约</Button>
             <Select placeholder="预约状态" allowClear style={{ width: 120 }} onChange={setStatusFilter}>
               <Select.Option value="pending">待确认</Select.Option>
               <Select.Option value="confirmed">已确认</Select.Option>
@@ -82,6 +118,34 @@ const AppointmentList: React.FC = () => {
             </Select>
           </Space>
           <Table dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+          <Modal title="新增预约" open={modalOpen} onCancel={() => { setModalOpen(false); form.resetFields() }} footer={null}>
+            <Form form={form} layout="vertical" onFinish={handleCreate}>
+              <Form.Item label="会员" name="member_id" rules={[{ required: true, message: '请选择会员' }]}>
+                <Select placeholder="请选择会员" showSearch filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}>
+                  {members.map(m => <Select.Option key={m.id} value={m.id} label={m.name}>{m.name} - {m.phone}</Select.Option>)}
+                </Select>
+              </Form.Item>
+              <Form.Item label="理发师" name="barber_id" rules={[{ required: true, message: '请选择理发师' }]}>
+                <Select placeholder="请选择理发师">
+                  {barbers.map(b => <Select.Option key={b.id} value={b.id}>{b.name}</Select.Option>)}
+                </Select>
+              </Form.Item>
+              <Form.Item label="服务项目" name="service_id" rules={[{ required: true, message: '请选择服务项目' }]}>
+                <Select placeholder="请选择服务项目">
+                  {services.map(s => <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>)}
+                </Select>
+              </Form.Item>
+              <Form.Item label="预约时间" name="appointment_time" rules={[{ required: true, message: '请选择预约时间' }]}>
+                <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+                <Space>
+                  <Button onClick={() => { setModalOpen(false); form.resetFields() }}>取消</Button>
+                  <Button type="primary" htmlType="submit" loading={submitting}>创建</Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </Modal>
         </>
       )}
     </div>
